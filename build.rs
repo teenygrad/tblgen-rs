@@ -1,12 +1,9 @@
-use std::{
-    env,
-    error::Error,
-    ffi::OsStr,
-    fs::read_dir,
-    path::Path,
-    process::{Command, exit},
-    str,
-};
+use std::error::Error;
+use std::ffi::OsStr;
+use std::fs::read_dir;
+use std::path::Path;
+use std::process::{Command, exit};
+use std::{env, str};
 
 const LLVM_MAJOR_VERSION: usize = if cfg!(feature = "llvm16-0") {
     16
@@ -18,8 +15,10 @@ const LLVM_MAJOR_VERSION: usize = if cfg!(feature = "llvm16-0") {
     19
 } else if cfg!(feature = "llvm20-0") {
     20
-} else {
+} else if cfg!(feature = "llvm21-0") {
     21
+} else {
+    22
 };
 
 fn main() {
@@ -30,7 +29,11 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
-    let version = llvm_config("--version")?;
+    let metadata = MetadataCommand::new().exec().unwrap();
+    let target_dir: PathBuf = metadata.target_directory.into();
+    let bin_dir: PathBuf = target_dir.join("install/bin");
+
+    let version = llvm_config(bin_dir.as_path(), "--version")?;
 
     if !version.starts_with(&format!("{LLVM_MAJOR_VERSION}.")) {
         return Err(format!(
@@ -41,25 +44,22 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     println!("cargo:rerun-if-changed=wrapper.h");
     println!("cargo:rerun-if-changed=cc");
-    println!("cargo:rustc-link-search={}", llvm_config("--libdir")?);
+    println!("cargo:rustc-link-search={}", llvm_config(bin_dir.as_path(), "--libdir")?);
 
     build_c_library()?;
 
-    for name in llvm_config("--libnames")?.trim().split(' ') {
+    for name in llvm_config(bin_dir.as_path(), "--libnames")?.trim().split(' ') {
         println!("cargo:rustc-link-lib=static={}", parse_library_name(name)?);
     }
 
-    for flag in llvm_config("--system-libs")?.trim().split(' ') {
+    for flag in llvm_config(bin_dir.as_path(), "--system-libs")?.trim().split(' ') {
         let flag = flag.trim_start_matches("-l");
 
         if flag.starts_with('/') {
             // llvm-config returns absolute paths for dynamically linked libraries.
             let path = Path::new(flag);
 
-            println!(
-                "cargo:rustc-link-search={}",
-                path.parent().unwrap().display()
-            );
+            println!("cargo:rustc-link-search={}", path.parent().unwrap().display());
             println!(
                 "cargo:rustc-link-lib={}",
                 parse_library_name(path.file_name().unwrap().to_str().unwrap())?
@@ -76,7 +76,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     bindgen::builder()
         .header("wrapper.h")
         .clang_arg("-Icc/include")
-        .clang_arg(format!("-I{}", llvm_config("--includedir")?))
+        .clang_arg(format!("-I{}", llvm_config(bin_dir.as_path(), "--includedir")?))
         .default_enum_style(bindgen::EnumVariation::ModuleConsts)
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()?
@@ -85,9 +85,9 @@ fn run() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn build_c_library() -> Result<(), Box<dyn Error>> {
-    unsafe { env::set_var("CXXFLAGS", llvm_config("--cxxflags")?) };
-    unsafe { env::set_var("CFLAGS", llvm_config("--cflags")?) };
+fn build_c_library(bin_dir: &Path) -> Result<(), Box<dyn Error>> {
+    unsafe { env::set_var("CXXFLAGS", llvm_config(bin_dir.as_path(), "--cxxflags")?) };
+    unsafe { env::set_var("CFLAGS", llvm_config(bin_dir.as_path(), "--cflags")?) };
 
     cc::Build::new()
         .cpp(true)
@@ -99,12 +99,8 @@ fn build_c_library() -> Result<(), Box<dyn Error>> {
                 .filter(|path| path.is_file() && path.extension() == Some(OsStr::new("cpp"))),
         )
         .include("cc/include")
-        .include(llvm_config("--includedir")?)
-        .flag(if cfg!(target_env = "msvc") {
-            "/WX"
-        } else {
-            "-Werror"
-        })
+        .include(llvm_config(bin_dir.as_path(), "--includedir")?)
+        .flag(if cfg!(target_env = "msvc") { "/WX" } else { "-Werror" })
         .std("c++17")
         .compile("CTableGen");
 
@@ -121,14 +117,8 @@ fn get_system_libcpp() -> Option<&'static str> {
     }
 }
 
-fn llvm_config(argument: &str) -> Result<String, Box<dyn Error>> {
-    let prefix = env::var(format!("TABLEGEN_{}0_PREFIX", LLVM_MAJOR_VERSION))
-        .map(|path| Path::new(&path).join("bin"))
-        .unwrap_or_default();
-    let call = format!(
-        "{} --link-static {argument}",
-        prefix.join("llvm-config").display()
-    );
+fn llvm_config(bin_dir: &Path, argument: &str) -> Result<String, Box<dyn Error>> {
+    let call = format!("{} --link-static {argument}", bin_dir.join("llvm-config").display());
 
     Ok(str::from_utf8(
         &if cfg!(target_os = "windows") {

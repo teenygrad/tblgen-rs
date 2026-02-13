@@ -18,6 +18,7 @@ thiserror = "2.0.12"
 [build-dependencies]
 bindgen = "0.72.1"
 cc = "1.2.17"
+cargo_metadata = "0.23.1"
 
 [features]
 default = ["llvm21-0"]
@@ -27,3 +28,4 @@ llvm18-0 = []
 llvm19-0 = []
 llvm20-0 = []
 llvm21-0 = []
+llvm22-0 = []
