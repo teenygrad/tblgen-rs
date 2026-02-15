@@ -223,7 +223,7 @@ fn llvm_bin_dir() -> PathBuf {
     let metadata = MetadataCommand::new().exec().unwrap();
     let target_dir: PathBuf = metadata.target_directory.into();
 
-    target_dir.join("install/bin")
+    target_dir.join("build/llvm-build/build/bin")
 }
 
 fn llvm_config(link_static: bool, argument: &str) -> Result<String, Box<dyn Error>> {
