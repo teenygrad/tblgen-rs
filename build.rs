@@ -1,25 +1,13 @@
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fs::read_dir;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, exit};
 use std::{env, str};
 
-const LLVM_MAJOR_VERSION: usize = if cfg!(feature = "llvm16-0") {
-    16
-} else if cfg!(feature = "llvm17-0") {
-    17
-} else if cfg!(feature = "llvm18-0") {
-    18
-} else if cfg!(feature = "llvm19-0") {
-    19
-} else if cfg!(feature = "llvm20-0") {
-    20
-} else if cfg!(feature = "llvm21-0") {
-    21
-} else {
-    22
-};
+use cargo_metadata::MetadataCommand;
+
+const LLVM_MAJOR_VERSION: usize = 22;
 
 fn main() {
     if let Err(error) = run() {
@@ -31,7 +19,7 @@ fn main() {
 fn run() -> Result<(), Box<dyn Error>> {
     let metadata = MetadataCommand::new().exec().unwrap();
     let target_dir: PathBuf = metadata.target_directory.into();
-    let bin_dir: PathBuf = target_dir.join("install/bin");
+    let bin_dir: PathBuf = target_dir.join("build/llvm-build/build/bin");
 
     let version = llvm_config(bin_dir.as_path(), "--version")?;
 
@@ -46,7 +34,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     println!("cargo:rerun-if-changed=cc");
     println!("cargo:rustc-link-search={}", llvm_config(bin_dir.as_path(), "--libdir")?);
 
-    build_c_library()?;
+    build_c_library(bin_dir.as_path())?;
 
     for name in llvm_config(bin_dir.as_path(), "--libnames")?.trim().split(' ') {
         println!("cargo:rustc-link-lib=static={}", parse_library_name(name)?);
@@ -86,8 +74,8 @@ fn run() -> Result<(), Box<dyn Error>> {
 }
 
 fn build_c_library(bin_dir: &Path) -> Result<(), Box<dyn Error>> {
-    unsafe { env::set_var("CXXFLAGS", llvm_config(bin_dir.as_path(), "--cxxflags")?) };
-    unsafe { env::set_var("CFLAGS", llvm_config(bin_dir.as_path(), "--cflags")?) };
+    unsafe { env::set_var("CXXFLAGS", llvm_config(bin_dir, "--cxxflags")?) };
+    unsafe { env::set_var("CFLAGS", llvm_config(bin_dir, "--cflags")?) };
 
     cc::Build::new()
         .cpp(true)
@@ -99,7 +87,7 @@ fn build_c_library(bin_dir: &Path) -> Result<(), Box<dyn Error>> {
                 .filter(|path| path.is_file() && path.extension() == Some(OsStr::new("cpp"))),
         )
         .include("cc/include")
-        .include(llvm_config(bin_dir.as_path(), "--includedir")?)
+        .include(llvm_config(bin_dir, "--includedir")?)
         .flag(if cfg!(target_env = "msvc") { "/WX" } else { "-Werror" })
         .std("c++17")
         .compile("CTableGen");

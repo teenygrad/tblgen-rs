@@ -10,30 +10,21 @@
 
 use std::marker::PhantomData;
 
-#[cfg(any(
-    feature = "llvm18-0",
-    feature = "llvm19-0",
-    feature = "llvm20-0",
-    feature = "llvm21-0"
-))]
 use crate::error::TableGenError;
 #[cfg(any(feature = "llvm16-0", feature = "llvm17-0"))]
-use crate::error::{SourceLocation, TableGenError, WithLocation};
-use crate::{
-    Error, SourceInfo, TableGenParser,
-    raw::{
-        TableGenRecordKeeperIteratorRef, TableGenRecordKeeperRef, TableGenRecordVectorRef,
-        tableGenRecordKeeperFree, tableGenRecordKeeperGetAllDerivedDefinitions,
-        tableGenRecordKeeperGetClass, tableGenRecordKeeperGetDef,
-        tableGenRecordKeeperGetFirstClass, tableGenRecordKeeperGetFirstDef,
-        tableGenRecordKeeperGetNextClass, tableGenRecordKeeperGetNextDef,
-        tableGenRecordKeeperItemGetName, tableGenRecordKeeperItemGetRecord,
-        tableGenRecordKeeperIteratorClone, tableGenRecordKeeperIteratorFree,
-        tableGenRecordVectorFree, tableGenRecordVectorGet,
-    },
-    record::Record,
-    string_ref::StringRef,
+use crate::error::{SourceLocation, WithLocation};
+use crate::raw::{
+    TableGenRecordKeeperIteratorRef, TableGenRecordKeeperRef, TableGenRecordVectorRef,
+    tableGenRecordKeeperFree, tableGenRecordKeeperGetAllDerivedDefinitions,
+    tableGenRecordKeeperGetClass, tableGenRecordKeeperGetDef, tableGenRecordKeeperGetFirstClass,
+    tableGenRecordKeeperGetFirstDef, tableGenRecordKeeperGetNextClass,
+    tableGenRecordKeeperGetNextDef, tableGenRecordKeeperItemGetName,
+    tableGenRecordKeeperItemGetRecord, tableGenRecordKeeperIteratorClone,
+    tableGenRecordKeeperIteratorFree, tableGenRecordVectorFree, tableGenRecordVectorGet,
 };
+use crate::record::Record;
+use crate::string_ref::StringRef;
+use crate::{Error, SourceInfo, TableGenParser};
 
 /// Struct that holds all records from a TableGen file.
 #[derive(Debug, PartialEq, Eq)]
@@ -145,10 +136,7 @@ pub struct NamedRecordIter<'a, T> {
 
 impl<T> NamedRecordIter<'_, T> {
     unsafe fn from_raw(raw: TableGenRecordKeeperIteratorRef) -> Self {
-        NamedRecordIter {
-            raw,
-            _kind: PhantomData,
-        }
+        NamedRecordIter { raw, _kind: PhantomData }
     }
 }
 
@@ -191,11 +179,7 @@ pub struct RecordIter<'a> {
 
 impl<'a> RecordIter<'a> {
     unsafe fn from_raw_vector(ptr: TableGenRecordVectorRef) -> RecordIter<'a> {
-        RecordIter {
-            raw: ptr,
-            index: 0,
-            _reference: PhantomData,
-        }
+        RecordIter { raw: ptr, index: 0, _reference: PhantomData }
     }
 }
 
@@ -205,11 +189,7 @@ impl<'a> Iterator for RecordIter<'a> {
     fn next(&mut self) -> Option<Record<'a>> {
         let next = unsafe { tableGenRecordVectorGet(self.raw, self.index) };
         self.index += 1;
-        if next.is_null() {
-            None
-        } else {
-            unsafe { Some(Record::from_raw(next)) }
-        }
+        if next.is_null() { None } else { unsafe { Some(Record::from_raw(next)) } }
     }
 }
 
@@ -239,10 +219,8 @@ mod test {
             .unwrap()
             .parse()
             .expect("valid tablegen");
-        rk.classes()
-            .for_each(|i| assert!(i.1.name().unwrap() == i.0.unwrap()));
-        rk.defs()
-            .for_each(|i| assert!(i.1.name().unwrap() == i.0.unwrap()));
+        rk.classes().for_each(|i| assert!(i.1.name().unwrap() == i.0.unwrap()));
+        rk.defs().for_each(|i| assert!(i.1.name().unwrap() == i.0.unwrap()));
         assert!(rk.classes().map(|i| i.0.unwrap()).eq(["A", "B", "C"]));
         assert!(rk.defs().map(|i| i.0.unwrap()).eq(["D1", "D2", "D3"]));
     }
