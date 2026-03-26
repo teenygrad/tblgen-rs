@@ -17,9 +17,15 @@ fn main() {
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
-    let metadata = MetadataCommand::new().exec().unwrap();
-    let target_dir: PathBuf = metadata.target_directory.into();
-    let bin_dir: PathBuf = target_dir.join("build/llvm-build/build/bin");
+    // When building with x.py, LLVM_CONFIG is set by bootstrap and points directly to the
+    // llvm-config binary. Use its parent as bin_dir. Otherwise fall back to cargo_metadata.
+    let bin_dir: PathBuf = if let Ok(llvm_config) = env::var("LLVM_CONFIG") {
+        PathBuf::from(&llvm_config).parent().unwrap().to_path_buf()
+    } else {
+        let metadata = MetadataCommand::new().exec().unwrap();
+        let target_dir: PathBuf = metadata.target_directory.into();
+        target_dir.join("build/llvm-build/build/bin")
+    };
 
     let version = llvm_config(bin_dir.as_path(), "--version")?;
 
