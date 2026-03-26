@@ -219,7 +219,17 @@ fn resolve_link_mode() -> Result<bool, Box<dyn Error>> {
 
 /// Locate the `llvm-config` built by this workspace, rather than one on `PATH`
 /// or pointed at by `TABLEGEN_<version>_PREFIX`.
+///
+/// When building with x.py, bootstrap sets `LLVM_CONFIG` to the llvm-config binary
+/// itself, so use its parent. Otherwise fall back to the workspace target directory.
 fn llvm_bin_dir() -> PathBuf {
+    if let Ok(llvm_config) = env::var("LLVM_CONFIG") {
+        return PathBuf::from(&llvm_config)
+            .parent()
+            .expect("LLVM_CONFIG has no parent directory")
+            .to_path_buf();
+    }
+
     let metadata = MetadataCommand::new().exec().unwrap();
     let target_dir: PathBuf = metadata.target_directory.into();
 
