@@ -22,7 +22,7 @@ cargo_metadata = "0.23.1"
 rustc_llvm = { path = "../../compiler/rustc_llvm" }
 
 [features]
-default = ["llvm22-0"]
+default = ["llvm23-0"]
 llvm16-0 = []
 llvm17-0 = []
 llvm18-0 = []
@@ -30,4 +30,5 @@ llvm19-0 = []
 llvm20-0 = []
 llvm21-0 = []
 llvm22-0 = []
+llvm23-0 = []
 force-static = []
